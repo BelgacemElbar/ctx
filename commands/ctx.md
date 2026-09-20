@@ -20,6 +20,9 @@ Then report back in this shape, and nothing longer:
 Rules:
 
 - Lead with the number, not with an explanation of what the number means.
+- Be accurate about billing. Tool output is **input** — written to cache at the 1h
+  rate, then read back at 0.1x. Thinking tokens are **output**, billed at 5x. Never
+  say either is "billed in full". Say what rate each is actually charged at.
 - If prefix rebuilds are high, the cause is almost always editing CLAUDE.md or memory
   mid-session, toggling plugins or MCP servers, switching model, or session compaction.
 - If peak context is above ~400k, say to `/clear` and start a fresh session instead of
