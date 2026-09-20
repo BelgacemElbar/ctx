@@ -1,139 +1,101 @@
 # ctx
 
-A local proxy that owns your LLM context. You point `ANTHROPIC_BASE_URL` at it and
-every request goes through one chokepoint, where the expensive things get fixed
-before they reach the API.
+**Every turn of a Claude Code session re-sends the entire conversation. That is where your usage goes — and nobody shows you the bill.**
 
-Every cost problem in an agentic session is the same problem: **context that
-grows unbounded and stops being cacheable.** One mechanism, applied at the
-network boundary, covers all of them.
+`ctx` reads the transcripts Claude Code already writes to disk and tells you what your tokens actually did. Then it stops the worst of it, at zero context cost.
 
-## Install as a Claude Code plugin
+```
+$ /ctx
 
-Works on every plan, including Pro/Max. No API key, no daemon, no network.
+  ctx audit — 528 sessions, 86,549 turns
+
+    modelled spend             $16,914
+    all-uncached baseline     $100,253     83% saved by caching
+    cache hit rate                  97%
+
+    prefix rebuilds                 718     156.9M tokens re-billed at full price
+      -> cost of those             $784     the avoidable part
+    avg static prefix            42,686     system + tools, before your first word
+    tool result weight      47,726,978     tokens of tool output
+    thinking tokens         17,380,885     billed at the output rate
+
+    most expensive sessions
+        $770.97  2582 turns  hit  95%  peak  934k  rebuilds  51
+        $381.70   446 turns  hit  98%  peak  559k  rebuilds   3
+        $355.07  1524 turns  hit  96%  peak  733k  rebuilds  28
+```
+
+That is one machine. Six months of real sessions, read in four seconds, without touching the network.
+
+## Install
 
 ```
 /plugin marketplace add BelgacemElbar/ctx
 /plugin install ctx@ctx
 ```
 
-Restart Claude Code so the hooks register. You get:
+Restart Claude Code. That's it — no API key, no daemon, no config file. Works on every plan, **including Pro and Max**.
 
-- **`/ctx`** — audits your recent sessions and reports where the tokens went.
-- **A read guard** — refuses whole-file reads over 800 lines and tells the model to
-  slice or grep instead. Runs as a `PreToolUse` hook, so it costs **zero context
-  tokens**; Claude Code counts hooks as harness-only.
-- **A session brief** — one line on startup: what the last session cost, its peak
-  context, and how many prefix rebuilds it had.
-- **A `context-budget` skill** — auto-fires when a session gets long or before
-  reading something large.
+Total added context cost: **~79 tokens**.
 
-Measured install cost: ~79 tokens always-on.
+## What you get
 
-The guard refuses the same file at most twice per session, then gets out of the
-way. Override with `CTX_MAX_LINES` / `CTX_MAX_BYTES`.
+### `/ctx` — the audit
 
-### Local development loop
+Reads `~/.claude/projects/**/*.jsonl`, models every turn at public API rates, and reports the leaks. Per-turn token usage, cache reads, cache writes split by 1h vs 5m, output and thinking tokens — all of it is already on disk, so this needs no credentials and makes no network calls.
 
-```bash
-claude plugin marketplace add /Users/ssss/dev/ctx   # local path works
-claude plugin install ctx@ctx
-# after a change:
-git commit -am "..." && claude plugin marketplace update ctx && claude plugin install ctx@ctx
-claude plugin details ctx    # shows component inventory and token cost
+### The read guard
+
+The one intervention that works on subscription traffic:
+
+```
+ctx: package-lock.json is 5,571 lines (~432,804 tokens). Reading it whole
+adds that to this turn and to every turn after it. Use offset/limit to read
+a slice, or Grep for what you actually need. Run /ctx to see your token spend.
 ```
 
-## Install as a proxy (API key only)
+A `PreToolUse` hook fires before `Read`, counts lines in 256KB chunks, and refuses files over 800 lines or 60KB. The file never enters context at all.
 
-```bash
-cd ~/dev/ctx
-node src/proxy.js            # or: npm link && ctx
-export ANTHROPIC_BASE_URL=http://localhost:8787
+**This costs zero tokens.** Claude Code treats hooks as harness-only — they run outside the context they're protecting, so the guard is free in the currency it saves.
+
+It also refuses the same file at most twice per session, then gets out of the way. Override with `CTX_MAX_LINES` / `CTX_MAX_BYTES`.
+
+### A session brief
+
+On startup, one line:
+
+```
+ctx: last session was 313 turns, $60.12, peak 416k context, 1 prefix rebuild.
+Run /ctx for the full audit.
 ```
 
-Then use Claude Code normally. Dashboard at `http://localhost:8787/`, terminal
-summary with `node bin/report.js`.
+### A `context-budget` skill
 
-### On a subscription — use the audit instead
+Auto-fires when a session gets long or before reading something large. Four rules: never read a whole file to find one thing, pipe command output instead of dumping it, don't change the cache prefix mid-session, clear instead of continuing.
 
-```bash
-node bin/audit.js            # reads ~/.claude/projects/**/*.jsonl
-open ~/.ctx/audit.html
-```
+## The three leaks
 
-⚠️ **The proxy only works on the API path.** Tested 2026-09-20 with Claude Code
-2.1.223 and a Pro/Max subscription: setting `ANTHROPIC_BASE_URL` makes the CLI
-refuse to send its credentials — it prints `Not logged in · Please run /login`
-and the upstream returns `invalid x-api-key`. Subscription auth is bound to
-Anthropic's endpoint on purpose. So for subscription users `ctx` is a
-**measurement** tool, not an interception tool.
+**Prefix rebuilds.** A cached token costs 0.1x. A full-price one costs 1x. If anything in the prefix changes — CLAUDE.md, memory files, connected plugins, MCP servers, model — the whole thing is re-billed at full price until it's cached again. 718 of those added up to 156.9M tokens on one machine. This is the single biggest number in almost every audit, and nothing else surfaces it.
 
-That is fine, because Claude Code already writes the ground truth to disk:
-`~/.claude/projects/**/*.jsonl` contains per-turn `usage` with cache reads,
-cache writes (broken out 1h vs 5m), output and thinking tokens. `audit.js`
-reads those, needs no network and no credentials, and works for anyone.
+**Tool bloat.** A static prefix of 42,686 tokens before you type anything. Every tool schema from every plugin and MCP server sits in every request, and it's the floor that every rebuild re-pays.
 
-## What it does
+**Context growth.** Context isn't a one-off cost, it's a cost you pay again on every later turn. One session ran 2,582 turns and peaked at 934k. Past ~400k, `/clear` beats continuing.
 
-| Problem | Mechanism | Where |
-| --- | --- | --- |
-| Prefix keeps changing, cache misses | Hash `system` + `tools` + `model` each turn, flag every change and bill it visibly | `optimize.js: checkPrefix` |
-| 60 MCP tool schemas resent every turn | Score tools against the session's first message, keep top N, **freeze** the set so the prefix stays stable | `optimize.js: pruneTools` |
-| Fat tool results (file reads, logs) live in context forever | Swap body for head + tail + an absolute path on disk; the agent re-reads or greps only what it needs | `optimize.js: offloadToolResults` |
-| Mechanical work billed at Opus rates | Regex rules on the latest user message rewrite `model` | `optimize.js: routeModel` |
-| No idea where the money goes | Per-turn accounting: tokens by class, cache hit rate, spend vs all-uncached baseline, per-session and per-model split | `dashboard.js`, `bin/report.js` |
+## Why a plugin and not a proxy
 
-Why offloading works without client changes: the truncated text contains a real
-absolute path, and the agent's own Read/Grep tools can open it. No new tool
-definition, no plugin, no MCP server.
+A proxy is the obvious design, so we built one first and tested it against a Pro/Max subscription on 2026-09-20. It does not work: with `ANTHROPIC_BASE_URL` set, Claude Code refuses to send its credentials (`Not logged in · Please run /login`) and the upstream returns `401 invalid x-api-key`. Subscription auth is bound to Anthropic's endpoint on purpose.
 
-## Config
+So the measurement layer reads local transcripts instead, and the intervention layer uses hooks. Both work on every plan.
 
-Written to `~/.ctx/config.json` on first run.
+The proxy still ships for API-key users who want live interception, including tool-schema pruning and tool-result offloading. See [`docs/PROXY.md`](docs/PROXY.md).
 
-```json
-{
-  "port": 8787,
-  "upstream": "https://api.anthropic.com",
-  "offload": { "enabled": true, "minChars": 4000, "keepChars": 1200, "keepTailChars": 400 },
-  "tools":   { "enabled": true, "pruneAbove": 10, "keepTop": 8 },
-  "routing": { "enabled": false, "rules": [{ "match": "format this json", "model": "claude-haiku-4-5" }] }
-}
-```
+## Limits
 
-`pruneAbove` is the important one: below that tool count, pruning is skipped
-entirely, because breaking a cache for 6 tools costs more than it saves.
+- **Read is guarded; Bash is not.** You can't know a command's output size before it runs. Grep with a narrow pattern instead of dumping logs.
+- **Figures are modelled at public API rates.** On a subscription they are what your usage is *worth*, not what you're invoiced.
+- **Claude Desktop is out of reach.** No base-URL override, and intercepting it means a MITM CA plus DNS override. Desktop also isn't where the spend is — no MCP servers, no multi-hour loops.
+- Prefix rebuilds are detected heuristically: a `cache_read` that drops below 80% of the previous turn means the prefix was rebuilt.
 
-### Claude Desktop
+## License
 
-No path in. Desktop has no base-URL override, and intercepting it means a MITM
-proxy with a locally trusted CA plus a DNS override — fragile, breaks on every
-app update, and not something to ship. Desktop is also not where the spend is:
-it has no MCP servers configured here, so its tool overhead is near zero, and
-its chats do not run multi-hour agentic loops. The levers that apply to Desktop
-are config-level: fewer connected MCP servers, smaller Project knowledge, and
-shorter chats.
-
-## Honest limits
-
-- Interception requires an API key. Subscription traffic cannot be proxied.
-- Audit figures are modelled at public API rates. On a subscription they are
-  what the usage is *worth*, not what is invoiced.
-
-- Anthropic `/v1/messages` only. OpenAI-shaped `tools[].function` is not handled yet.
-- Offloading is content-blind — it cannot tell a build log you need from one you
-  don't. The head + tail + path heuristic is a first cut.
-- Sessions are identified by the `x-ctx-session` header; without it everything
-  lands in `default`. A client wrapper that injects a real session id is the fix.
-- Tool pruning is keyword-scored, not embedded. Good enough, not smart.
-- `~/.ctx/store/` grows unbounded. Needs a TTL sweep.
-
-## Kill criterion
-
-Ship it, post it, and measure. Kill it if, two weeks after the launch post:
-
-- fewer than **20 GitHub stars**, or
-- fewer than **3 people who are not me** have run it against their own traffic, or
-- it cannot show **≥30% below the all-uncached baseline** on my own sessions.
-
-Any one of those failing means stop. Not "iterate" — stop.
+MIT. Read-only against your own files; the audit never leaves your machine.
