@@ -78,7 +78,7 @@ process.stdin.on('end', () => {
   }
 
   const bits = [`${turns.length} turns`, fmtUsd(cost), `peak ${(peak / 1000).toFixed(0)}k context`];
-  if (rebuilds) bits.push(`${rebuilds} prefix rebuilds`);
+  if (rebuilds) bits.push(`${rebuilds} prefix rebuild${rebuilds === 1 ? '' : 's'}`);
   console.log(
     `ctx: last session was ${bits.join(', ')}.` +
       (rebuilds > 2

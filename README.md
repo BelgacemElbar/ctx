@@ -8,7 +8,42 @@ Every cost problem in an agentic session is the same problem: **context that
 grows unbounded and stops being cacheable.** One mechanism, applied at the
 network boundary, covers all of them.
 
-## Install
+## Install as a Claude Code plugin
+
+Works on every plan, including Pro/Max. No API key, no daemon, no network.
+
+```
+/plugin marketplace add BelgacemElbar/ctx
+/plugin install ctx@ctx
+```
+
+Restart Claude Code so the hooks register. You get:
+
+- **`/ctx`** — audits your recent sessions and reports where the tokens went.
+- **A read guard** — refuses whole-file reads over 800 lines and tells the model to
+  slice or grep instead. Runs as a `PreToolUse` hook, so it costs **zero context
+  tokens**; Claude Code counts hooks as harness-only.
+- **A session brief** — one line on startup: what the last session cost, its peak
+  context, and how many prefix rebuilds it had.
+- **A `context-budget` skill** — auto-fires when a session gets long or before
+  reading something large.
+
+Measured install cost: ~79 tokens always-on.
+
+The guard refuses the same file at most twice per session, then gets out of the
+way. Override with `CTX_MAX_LINES` / `CTX_MAX_BYTES`.
+
+### Local development loop
+
+```bash
+claude plugin marketplace add /Users/ssss/dev/ctx   # local path works
+claude plugin install ctx@ctx
+# after a change:
+git commit -am "..." && claude plugin marketplace update ctx && claude plugin install ctx@ctx
+claude plugin details ctx    # shows component inventory and token cost
+```
+
+## Install as a proxy (API key only)
 
 ```bash
 cd ~/dev/ctx
