@@ -1,0 +1,17 @@
+{
+  "name": "ctx",
+  "version": "0.1.0",
+  "description": "A local proxy that owns your LLM context: keeps the prefix cacheable, offloads fat tool results, prunes tool schemas, routes cheap work to cheap models, and shows you where the money goes.",
+  "type": "module",
+  "bin": {
+    "ctx": "./bin/ctx.js"
+  },
+  "scripts": {
+    "start": "node src/proxy.js",
+    "report": "node bin/report.js"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  }
+}

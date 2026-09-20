@@ -1,0 +1,15 @@
+{
+  "name": "ctx",
+  "owner": {
+    "name": "Belgacem Elbar",
+    "url": "https://github.com/BelgacemElbar"
+  },
+  "description": "Token accounting for Claude Code. Finds the cache-prefix rebuilds, tool bloat and context growth that eat your usage.",
+  "plugins": [
+    {
+      "name": "ctx",
+      "source": ".",
+      "description": "Reads Claude Code's own transcripts to show where tokens went, and blocks whole-file reads that blow the context budget. /ctx to audit."
+    }
+  ]
+}

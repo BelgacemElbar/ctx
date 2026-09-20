@@ -1,0 +1,10 @@
+{
+  "name": "ctx",
+  "version": "0.1.0",
+  "description": "Shows where your Claude Code tokens actually go — prefix rebuilds, tool bloat, context growth — and blocks the reads that blow the budget.",
+  "author": {
+    "name": "Belgacem Elbar",
+    "url": "https://github.com/BelgacemElbar"
+  },
+  "keywords": ["tokens", "cost", "context", "cache", "claude-code", "performance"]
+}
