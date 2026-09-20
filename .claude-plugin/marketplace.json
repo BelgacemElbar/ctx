@@ -9,7 +9,7 @@
     {
       "name": "ctx",
       "source": ".",
-      "description": "Reads Claude Code's own transcripts to show where tokens went, and blocks whole-file reads that blow the context budget. /ctx to audit."
+      "description": "Cuts Claude Code token usage by trimming oversized tool calls before they run: 433k-token file reads become 120 lines, 60k-char command output becomes 6k, compaction gets aggressive. /ctx to audit."
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "name": "ctx",
   "version": "0.1.0",
-  "description": "Shows where your Claude Code tokens actually go — prefix rebuilds, tool bloat, context growth — and blocks the reads that blow the budget.",
+  "description": "Cuts your Claude Code token usage by rewriting oversized tool calls before they run: trims file reads, bounds searches, truncates command output, and forces aggressive compaction. /ctx to audit.",
   "author": {
     "name": "Belgacem Elbar",
     "url": "https://github.com/BelgacemElbar"

@@ -44,21 +44,44 @@ Total added context cost: **~79 tokens**.
 
 Reads `~/.claude/projects/**/*.jsonl`, models every turn at public API rates, and reports the leaks. Per-turn token usage, cache reads, cache writes split by 1h vs 5m, output and thinking tokens — all of it is already on disk, so this needs no credentials and makes no network calls.
 
-### The read guard
+### It trims before the tokens are spent
 
-The one intervention that works on subscription traffic:
+Reporting a number doesn't reduce it. These four hooks rewrite the tool call
+*before it runs*, so the bytes never enter context.
+
+**`PreToolUse` on Read** — any file over 150 lines gets a 120-line limit injected.
+
+```json
+{"updatedInput":{"file_path":"package-lock.json","limit":120}}
+```
+
+That file is 5,571 lines, ~433k tokens. You get 120 lines.
+
+**`PreToolUse` on Grep** — injects `head_limit: 30` on any search that doesn't set one.
+
+**`PreToolUse` on Bash** — rewrites bare `cat f` to `head -120 f`, and `git log` to `git log -n 30`.
+
+**`PostToolUse`** — tells the model what it did *not* see, so a trimmed file is never
+mistaken for a short one:
 
 ```
-ctx: package-lock.json is 5,571 lines (~432,804 tokens). Reading it whole
-adds that to this turn and to every turn after it. Use offset/limit to read
-a slice, or Grep for what you actually need. Run /ctx to see your token spend.
+ctx: this file is 5,571 lines; you were shown 120. The rest was withheld to
+protect the context budget. Use offset/limit or Grep if you need more.
 ```
 
-A `PreToolUse` hook fires before `Read`, counts lines in 256KB chunks, and refuses files over 800 lines or 60KB. The file never enters context at all.
+…and truncates command output over 30k chars, keeping head and tail because errors
+live at the end. Measured: **60,000 chars → 6,195, 89.7% removed.**
 
-**This costs zero tokens.** Claude Code treats hooks as harness-only — they run outside the context they're protecting, so the guard is free in the currency it saves.
+**`PreCompact`** — compaction decides how much of a session survives, and the default
+is generous. This makes it aggressive: discard tool results entirely, collapse dead
+ends, keep only goal, decisions, changed files and open questions, target under
+8,000 tokens. Every token kept after compaction is re-sent on every later turn.
 
-It also refuses the same file at most twice per session, then gets out of the way. Override with `CTX_MAX_LINES` / `CTX_MAX_BYTES`.
+**All four cost zero context tokens.** Claude Code treats hooks as harness-only —
+they run outside the context they're protecting.
+
+Tunable with `CTX_READ_LINES`, `CTX_READ_KEEP`, `CTX_GREP_LIMIT`, `CTX_BASH_CHARS`
+(set `0` to disable output truncation), `CTX_TRIM_BASH=0` to leave shell commands alone.
 
 ### A session brief
 
@@ -91,7 +114,13 @@ The proxy still ships for API-key users who want live interception, including to
 
 ## Limits
 
-- **Read is guarded; Bash is not.** You can't know a command's output size before it runs. Grep with a narrow pattern instead of dumping logs.
+- **Read and Grep are trimmed on the way in; Bash only partly.** Rewriting arbitrary
+  shell is unsafe, so only bare `cat` and `git log` are rewritten before running —
+  everything else is truncated *after* the fact, which still keeps the tokens out of
+  context but doesn't save the generation.
+- **Trimming trades completeness for budget.** If you genuinely need a whole 5,571-line
+  file, ask for it in slices. The point is that this is now a choice you make, not a
+  default that costs you 433k tokens.
 - **Figures are modelled at public API rates.** On a subscription they are what your usage is *worth*, not what you're invoiced.
 - **Claude Desktop is out of reach.** No base-URL override, and intercepting it means a MITM CA plus DNS override. Desktop also isn't where the spend is — no MCP servers, no multi-hour loops.
 - Prefix rebuilds are detected heuristically: a `cache_read` that drops below 80% of the previous turn means the prefix was rebuilt.

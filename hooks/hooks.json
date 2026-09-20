@@ -2,13 +2,39 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read",
+        "matcher": "Read|Grep|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.js\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/trim.js\"",
             "timeout": 5,
-            "statusMessage": "Checking context budget..."
+            "statusMessage": "Trimming request to fit the context budget..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/trim-output.js\"",
+            "timeout": 5,
+            "statusMessage": "Trimming output..."
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/compact.js\"",
+            "timeout": 5,
+            "statusMessage": "Setting compaction budget..."
           }
         ]
       }
@@ -21,7 +47,7 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brief.js\"",
             "timeout": 10,
-            "statusMessage": "Reading last session's token spend..."
+            "statusMessage": "Reading last session's spend..."
           }
         ]
       }
