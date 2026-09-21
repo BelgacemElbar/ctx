@@ -29,9 +29,14 @@ I was editing CLAUDE.md mid-session. 156.9M tokens. ~$784.
 
 **3/**
 
-So I built ctx. It reads the transcripts Claude Code already writes to disk and
-shows you where the tokens went. Then it blocks the reads that blow the budget —
-as a PreToolUse hook, so the guard costs zero context tokens.
+So I built ctx. Seven hooks, zero context tokens:
+
+- Trims file reads before they enter context
+- Blocks junk files (lockfiles, minified, binaries)
+- Breaks tool loops (same file 5x, same error 3x)
+- Saves your session before compaction and hands it back after
+- Forces aggressive compaction (target <8k tokens)
+- Audits your spend from local transcripts
 
 ```
 /plugin marketplace add BelgacemElbar/ctx
@@ -47,18 +52,16 @@ github.com/BelgacemElbar/ctx
 I read six months of my Claude Code transcripts: 528 sessions, 86,549 turns,
 $16,914 of usage.
 
-718 cache-prefix rebuilds. 156.9M tokens re-billed at full price instead of 0.1x.
-Cause: editing CLAUDE.md mid-session.
+Built a plugin with seven zero-context hooks that stop the waste: trims reads,
+blocks junk files, breaks loops, survives compaction. Free, ~79 tokens.
 
-Built a plugin that shows it and blocks the worst reads. Free, zero context cost.
 github.com/BelgacemElbar/ctx
 
 ---
 
 ## Reddit — r/ClaudeAI and r/ClaudeCode
 
-**Title:** I read my own Claude Code transcripts: 718 cache-prefix rebuilds,
-156.9M tokens re-billed at full price
+**Title:** I built 7 hooks that cut Claude Code token waste — trims, junk-file shield, loop breaker, compaction survival
 
 **Body:**
 
@@ -84,18 +87,24 @@ What I built, as a plugin rather than a proxy, because a proxy doesn't work here
 setting `ANTHROPIC_BASE_URL` on a Pro/Max subscription makes Claude Code refuse
 to send credentials (401 invalid x-api-key). Subscription auth is bound to
 Anthropic's endpoint. Hooks work on every plan, and Claude Code counts them as
-harness-only, so the read guard costs **zero** context tokens.
+harness-only, so every intervention costs **zero** context tokens.
 
-- `/ctx` — audits your sessions
-- a PreToolUse hook that refuses whole-file reads over 800 lines and tells the
-  model to slice or grep instead
-- a one-line startup brief: what the last session cost
-- MIT, read-only against your own files, no network calls
+Seven hooks:
+
+1. **Trimmer** — caps file reads to 120 lines, grep to 30 results, rewrites `cat` → `head`, truncates command output at 30k chars
+2. **Junk-file shield** — 30+ patterns + binary detector: lockfiles, minified bundles, node_modules/, archives, fonts, databases. Caps to 50 lines with an explanation so the model doesn't retry
+3. **Loop breaker** — same file read 5×, same command 3×, same error 3× → injects a stop-and-think message. Kills the read-fail-read death spiral
+4. **Compaction survival** — saves goal + changed files + last errors + where it left off before compaction, re-injects after. Fixes the #1 complaint: "Claude forgets everything after compaction"
+5. **Aggressive compaction** — discard tool results, collapse dead ends, target <8k tokens. Every token kept after compaction is re-sent on every later turn
+6. **Session brief** — one line on startup: what the last session cost
+7. **`/ctx` audit** — reads local transcripts, models spend at API rates, reports the leaks
 
 ```
 /plugin marketplace add BelgacemElbar/ctx
 /plugin install ctx@ctx
 ```
+
+MIT, read-only against your own files, no network calls. ~79 tokens added.
 
 Happy to be told the modelling is wrong. The script is 200 lines and it only
 reads your own files.
@@ -104,7 +113,7 @@ reads your own files.
 
 ## Hacker News
 
-**Title:** Show HN: ctx – see where your Claude Code tokens go
+**Title:** Show HN: ctx — 7 zero-context hooks that cut Claude Code token waste
 
 **First comment:**
 
@@ -119,29 +128,38 @@ mine came from editing CLAUDE.md while working.
 Detection heuristic is simple: a `cache_read` that drops below 80% of the
 previous turn means the prefix was rebuilt.
 
-It also ships a PreToolUse hook that refuses whole-file reads over 800 lines.
-Claude Code counts hooks as harness-only, so the guard costs zero context tokens
-in the currency it's saving.
+But the real intervention is the seven hooks, not the audit. They run
+harness-only — zero context tokens:
+
+- Trims file reads, grep results, and command output before they enter context
+- Blocks junk files (lockfiles, minified, binaries, node_modules/) — 30+ patterns
+- Breaks loops: same file read 5×, same command 3×, same error 3× → stop-and-think
+- Survives compaction: saves goal + changed files + errors before, re-injects after
+- Forces aggressive compaction: target <8k tokens, discard tool results
 
 Works on Pro/Max. A proxy does not — Claude Code won't send subscription
 credentials to a custom base URL.
+
+github.com/BelgacemElbar/ctx
 
 ---
 
 ## Product Hunt
 
-**Tagline:** See where your Claude Code tokens go — and stop the worst of it
+**Tagline:** 7 zero-context hooks that cut your Claude Code token waste
 
 **Description:**
 
-Every turn of a Claude Code session re-sends the entire conversation. ctx reads
-the transcripts Claude Code already writes to your disk and shows you what your
-tokens actually did: cache-prefix rebuilds, tool bloat, context growth, thinking
-tokens.
+Every turn of a Claude Code session re-sends the entire conversation. ctx stops
+the waste with seven hooks that run harness-only — zero context tokens:
 
-Then it stops the worst of it. A PreToolUse hook refuses whole-file reads over
-800 lines before they enter context — and because Claude Code treats hooks as
-harness-only, the guard costs zero context tokens.
+1. Trims file reads to 120 lines, grep to 30 results, command output to 30k chars
+2. Junk-file shield: blocks lockfiles, minified bundles, binaries, archives, 30+ patterns
+3. Loop breaker: stops read-fail-read death spirals automatically
+4. Compaction survival: saves your session before compaction, hands it back after
+5. Aggressive compaction: target <8k tokens, discard tool results
+6. Session brief: one line on startup showing last session's cost
+7. `/ctx` audit: reads local transcripts, models spend at API rates
 
 No API key. No daemon. Works on every plan, including Pro and Max. ~79 tokens
 added to your session. MIT licensed, read-only against your own files.
