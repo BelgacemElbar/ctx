@@ -2,6 +2,17 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/shield.js\"",
+            "timeout": 3,
+            "statusMessage": "Checking for junk files..."
+          }
+        ]
+      },
+      {
         "matcher": "Read|Grep|Bash",
         "hooks": [
           {
@@ -9,6 +20,12 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/trim.js\"",
             "timeout": 5,
             "statusMessage": "Trimming request to fit the context budget..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/loop.js\"",
+            "timeout": 3,
+            "statusMessage": "Checking for loops..."
           }
         ]
       }
@@ -22,6 +39,12 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/trim-output.js\"",
             "timeout": 5,
             "statusMessage": "Trimming output..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/loop.js\"",
+            "timeout": 3,
+            "statusMessage": "Checking for error loops..."
           }
         ]
       }
@@ -35,6 +58,25 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/compact.js\"",
             "timeout": 5,
             "statusMessage": "Setting compaction budget..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff.js\"",
+            "timeout": 5,
+            "statusMessage": "Saving session handoff..."
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff.js\"",
+            "timeout": 5,
+            "statusMessage": "Restoring session handoff..."
           }
         ]
       }
@@ -48,6 +90,12 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/brief.js\"",
             "timeout": 10,
             "statusMessage": "Reading last session's spend..."
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff.js\"",
+            "timeout": 5,
+            "statusMessage": "Restoring session handoff..."
           }
         ]
       }

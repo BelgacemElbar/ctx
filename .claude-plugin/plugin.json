@@ -1,10 +1,10 @@
 {
   "name": "ctx",
-  "version": "0.1.0",
-  "description": "Cuts your Claude Code token usage by rewriting oversized tool calls before they run: trims file reads, bounds searches, truncates command output, and forces aggressive compaction. /ctx to audit.",
+  "version": "0.2.0",
+  "description": "Cuts your Claude Code token usage with zero-context hooks: trims file reads, blocks junk files, breaks tool loops, survives compaction, and forces aggressive compaction. /ctx to audit.",
   "author": {
     "name": "Belgacem Elbar",
     "url": "https://github.com/BelgacemElbar"
   },
-  "keywords": ["tokens", "cost", "context", "cache", "claude-code", "performance"]
+  "keywords": ["tokens", "cost", "context", "cache", "claude-code", "performance", "compaction", "loop-breaker"]
 }
